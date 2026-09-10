@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
+import { generateWithQwen } from "@/lib/qwen";
 
 interface Props {
   data: WritingData;
@@ -6,12 +8,25 @@ interface Props {
 }
 
 export default function Step5Algorithm({ data, onChange }: Props) {
-  // 占位生图函数：等接入 image2 API 后替换
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const text = await generateWithQwen("algorithm", data);
+      onChange({ algorithm: text });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGenerateImage = (
     kind: "algorithmFlowImage" | "algorithmIllustImage"
   ) => {
-    // TODO: 接入 image2 API
-    // 目前先给一张 SVG 占位图
     const label =
       kind === "algorithmFlowImage" ? "Algorithm Flow" : "Illustration";
     const svg = `
@@ -31,14 +46,29 @@ export default function Step5Algorithm({ data, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h2 className="text-xl font-bold text-brand-700">算法介绍</h2>
-        <p className="mt-1 text-sm text-ink-sub">
-          描述你的方法框架、模块组成和核心公式，并可生成两张配图：算法框架流程图 + 方法示意图。
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-brand-700">算法介绍</h2>
+          <p className="mt-1 text-sm text-ink-sub">
+            描述你的方法框架、模块组成和核心公式，并可生成两张配图：算法框架流程图 + 方法示意图。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={loading || !data.topic}
+          className="shrink-0 rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-700 disabled:opacity-50"
+        >
+          {loading ? "生成中..." : "✨ AI 生成"}
+        </button>
       </header>
 
-      {/* 正文编辑 */}
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-2 text-xs text-red-600">
+          {error}
+        </div>
+      )}
+
       <section className="flex flex-col gap-2">
         <label className="text-sm font-semibold text-ink">方法正文</label>
         <textarea
@@ -52,7 +82,6 @@ export default function Step5Algorithm({ data, onChange }: Props) {
         </div>
       </section>
 
-      {/* 两张图 */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ImageSlot
           title="算法框架流程图"

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
+import { generateWithQwen } from "@/lib/qwen";
 
 interface Props {
   data: WritingData;
@@ -7,6 +9,21 @@ interface Props {
 
 export default function Step6Experiment({ data, onChange }: Props) {
   const table = data.experimentTable;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const text = await generateWithQwen("experiment", data);
+      onChange({ experiment: text });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const updateCell = (r: number, c: number, value: string) => {
     const rows = table.rows.map((row, ri) =>
@@ -49,14 +66,29 @@ export default function Step6Experiment({ data, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h2 className="text-xl font-bold text-brand-700">实验结果</h2>
-        <p className="mt-1 text-sm text-ink-sub">
-          说明实验设置、对比方法与结果分析，并整理成表格。
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-brand-700">实验结果</h2>
+          <p className="mt-1 text-sm text-ink-sub">
+            说明实验设置、对比方法与结果分析，并整理成表格。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={loading || !data.topic}
+          className="shrink-0 rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-700 disabled:opacity-50"
+        >
+          {loading ? "生成中..." : "✨ AI 生成"}
+        </button>
       </header>
 
-      {/* 正文 */}
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-2 text-xs text-red-600">
+          {error}
+        </div>
+      )}
+
       <section className="flex flex-col gap-2">
         <label className="text-sm font-semibold text-ink">结果分析正文</label>
         <textarea
@@ -70,12 +102,9 @@ export default function Step6Experiment({ data, onChange }: Props) {
         </div>
       </section>
 
-      {/* 表格编辑 */}
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-semibold text-ink">
-            结果表格
-          </label>
+          <label className="text-sm font-semibold text-ink">结果表格</label>
           <div className="flex gap-2">
             <button
               type="button"
@@ -129,10 +158,7 @@ export default function Step6Experiment({ data, onChange }: Props) {
               {table.rows.map((row, ri) => (
                 <tr key={ri} className="hover:bg-blue-50/40">
                   {row.map((cell, ci) => (
-                    <td
-                      key={ci}
-                      className="border border-blue-100 px-2 py-1.5"
-                    >
+                    <td key={ci} className="border border-blue-100 px-2 py-1.5">
                       <input
                         value={cell}
                         onChange={(e) => updateCell(ri, ci, e.target.value)}
