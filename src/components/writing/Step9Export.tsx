@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
+import { clearData } from "@/lib/storage";
 
 interface Props {
   data: WritingData;
@@ -15,7 +16,6 @@ function buildTex(data: WritingData): string {
       .replace(/_/g, "\\_")
       .replace(/#/g, "\\#");
 
-  // 段落：空行 -> \par
   const para = (s: string) =>
     s
       .split(/\n\s*\n/)
@@ -187,6 +187,15 @@ export default function Step9Export({ data }: Props) {
     w.document.title = "main.tex 预览";
   };
 
+  const handleClearAll = () => {
+    const ok = window.confirm(
+      "确定要清空所有已保存的数据吗？此操作不可恢复。"
+    );
+    if (!ok) return;
+    clearData();
+    window.location.reload();
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -225,7 +234,7 @@ export default function Step9Export({ data }: Props) {
           </button>
         </div>
         <pre className="max-h-[340px] min-h-[280px] overflow-auto rounded-lg border border-blue-100 bg-[#f7faff] p-4 text-[11.5px] leading-relaxed text-ink">
-{tex}
+          {tex}
         </pre>
       </section>
 
@@ -252,6 +261,27 @@ export default function Step9Export({ data }: Props) {
         ⓘ 下载的 zip 包含：main.tex、references.bib、figures/（两张图，若已生成）。
         打开 <b>Overleaf</b> 上传后即可编译成 PDF（建议编译器选 XeLaTeX）。
       </p>
+
+      {/* 危险操作 */}
+      <section className="mt-4 rounded-lg border border-red-100 bg-red-50/40 px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-red-600">
+              危险操作
+            </div>
+            <div className="mt-0.5 text-xs text-ink-sub">
+              清空所有已保存在本地的数据（课题、章节内容、上传文件等）。
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="shrink-0 rounded-lg bg-red-500 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-red-600"
+          >
+            清空全部数据
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

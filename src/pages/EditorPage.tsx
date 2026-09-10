@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import WritingSidebar from "@/components/editor/WritingSidebar";
-import { STEPS, initialWritingData, type WritingData } from "@/data/writingSteps";
+import { STEPS, type WritingData } from "@/data/writingSteps";
+import { loadData, saveData } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 import Step1Upload from "@/components/writing/Step1Upload";
@@ -16,7 +17,12 @@ import Step9Export from "@/components/writing/Step9Export";
 export default function EditorPage() {
   const navigate = useNavigate();
   const [stepIndex, setStepIndex] = useState(0);
-  const [data, setData] = useState<WritingData>(initialWritingData);
+  const [data, setData] = useState<WritingData>(() => loadData());
+
+  // 数据变化时自动保存到 localStorage
+  useEffect(() => {
+    saveData(data);
+  }, [data]);
 
   const handleChange = (patch: Partial<WritingData>) => {
     setData((prev) => ({ ...prev, ...patch }));
@@ -46,7 +52,7 @@ export default function EditorPage() {
 
       <section className="flex min-w-0 flex-col overflow-hidden p-4">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/60 shadow-lg backdrop-blur">
-          {/* 顶部：返回 + 标题 */}
+          {/* 顶部：返回 + 标题 + 保存状态 */}
           <header className="flex items-center gap-4 border-b border-blue-100 bg-white/70 px-6 py-3">
             <Button
               variant="secondary"
@@ -58,6 +64,10 @@ export default function EditorPage() {
             <span className="text-sm font-bold text-brand-700">
               写作 · Writing
             </span>
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-green-600">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+              已自动保存
+            </span>
           </header>
 
           {/* 步骤条 */}
@@ -66,13 +76,9 @@ export default function EditorPage() {
               const isDone = idx < stepIndex;
               const isActive = idx === stepIndex;
               return (
-                <div
-                  key={s.key}
-                  className="flex flex-1 items-center gap-1"
-                >
+                <div key={s.key} className="flex flex-1 items-center gap-1">
                   <button
                     onClick={() => {
-                      // 只能跳回已完成的步骤或当前步，不能跳到未完成的
                       if (idx <= stepIndex) setStepIndex(idx);
                     }}
                     className="flex items-center gap-2 transition-all"
@@ -84,8 +90,8 @@ export default function EditorPage() {
                         isActive
                           ? "bg-brand-500 text-white shadow-md"
                           : isDone
-                          ? "bg-brand-100 text-brand-500 cursor-pointer"
-                          : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                          ? "cursor-pointer bg-brand-100 text-brand-500"
+                          : "cursor-not-allowed bg-slate-100 text-slate-400"
                       )}
                     >
                       {idx + 1}
@@ -115,9 +121,8 @@ export default function EditorPage() {
             })}
           </div>
 
-          {/* 当前步骤标题 + 内容 */}
+          {/* 当前步骤内容 */}
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-8">
-            {/* 步骤内容 */}
             <div className="mx-auto flex w-full max-w-[900px] min-h-0 flex-1 flex-col">
               {currentStep.key === "upload" && (
                 <Step1Upload data={data} onChange={handleChange} />
@@ -171,8 +176,8 @@ export default function EditorPage() {
           {/* 底部：上一步 / 下一步 */}
           <footer className="flex items-center justify-between gap-4 border-t border-blue-100 bg-white/70 px-6 py-3">
             <div className="text-xs text-ink-sub">
-              第 <b className="text-brand-700">{stepIndex + 1}</b> / {STEPS.length} 步 ·{" "}
-              <b className="text-brand-700">{currentStep.zh}</b>
+              第 <b className="text-brand-700">{stepIndex + 1}</b> / {STEPS.length}{" "}
+              步 · <b className="text-brand-700">{currentStep.zh}</b>
             </div>
 
             <div className="flex gap-3">
