@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
+import WordCounter from "./WordCounter";
 
 interface Props {
   data: WritingData;
@@ -26,7 +27,7 @@ export default function Step2TitleAbstract({ data, onChange }: Props) {
           });
           return;
         } catch {
-          // 解析失败就走下面
+          // JSON 解析失败就走下面
         }
       }
       onChange({ abstract: raw });
@@ -62,6 +63,7 @@ export default function Step2TitleAbstract({ data, onChange }: Props) {
         </div>
       )}
 
+      {/* 标题 */}
       <section>
         <label className="mb-2 block text-sm font-semibold text-ink">
           论文标题
@@ -73,11 +75,12 @@ export default function Step2TitleAbstract({ data, onChange }: Props) {
           placeholder="例如：A Contrastive Learning Framework for Few-Shot Image Classification"
           className="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
         />
-        <div className="mt-1 text-right text-xs text-ink-sub">
-          {data.title.length} 字符
+        <div className="mt-1">
+          <WordCounter text={data.title} min={8} max={25} />
         </div>
       </section>
 
+      {/* 摘要 */}
       <section className="flex min-h-0 flex-1 flex-col">
         <label className="mb-2 block text-sm font-semibold text-ink">
           摘要（Abstract）
@@ -88,9 +91,8 @@ export default function Step2TitleAbstract({ data, onChange }: Props) {
           placeholder="在这里撰写摘要。建议包含：研究背景、存在问题、本文方法、主要结果与贡献。"
           className="h-[280px] w-full resize-none rounded-lg border border-blue-100 bg-white p-4 font-serif text-[15px] leading-relaxed text-ink outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
         />
-        <div className="mt-1 flex justify-between text-xs text-ink-sub">
-          <span>建议 150~250 词</span>
-          <span>{data.abstract.length} 字符</span>
+        <div className="mt-1">
+          <WordCounter text={data.abstract} min={150} max={250} />
         </div>
       </section>
     </div>

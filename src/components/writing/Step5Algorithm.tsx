@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
+import WordCounter from "./WordCounter";
 
 interface Props {
   data: WritingData;
@@ -17,10 +18,8 @@ export default function Step5Algorithm({ data, onChange }: Props) {
   const [imgLoadingIllust, setImgLoadingIllust] = useState(false);
   const [imgError, setImgError] = useState("");
 
-  // 大图查看
   const [preview, setPreview] = useState<string | null>(null);
 
-  // 隐藏的文件上传 input
   const flowUploadRef = useRef<HTMLInputElement>(null);
   const illustUploadRef = useRef<HTMLInputElement>(null);
 
@@ -171,9 +170,7 @@ export default function Step5Algorithm({ data, onChange }: Props) {
           placeholder="在这里描述你的算法：整体框架、各模块作用、训练目标等。"
           className="h-[220px] w-full resize-none rounded-lg border border-blue-100 bg-white p-5 font-serif text-[15px] leading-relaxed text-ink outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
         />
-        <div className="text-right text-xs text-ink-sub">
-          {data.algorithm.length} 字符
-        </div>
+        <WordCounter text={data.algorithm} min={600} max={1200} />
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -213,7 +210,6 @@ export default function Step5Algorithm({ data, onChange }: Props) {
         ⓘ 可点击图片放大查看；支持 AI 生成、上传替换、输入 URL、下载。
       </p>
 
-      {/* 大图查看层（带缩放/平移） */}
       {preview && <Lightbox src={preview} onClose={() => setPreview(null)} />}
     </div>
   );
@@ -253,7 +249,6 @@ function ImageSlot({
         <div className="mt-0.5 text-xs text-ink-sub">{description}</div>
       </div>
 
-      {/* 图片容器：flex 居中 + 图片 object-contain 完整显示 */}
       <div className="flex h-[260px] items-center justify-center overflow-hidden rounded-lg border border-dashed border-blue-200 bg-[#f7faff] p-2">
         {loading ? (
           <div className="text-center text-xs text-ink-sub">
@@ -340,8 +335,6 @@ function ImageSlot({
     </div>
   );
 }
-
-/* ================= 大图查看（居中 + 滚轮缩放 + 拖动平移） ================= */
 
 function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   const [scale, setScale] = useState(1);

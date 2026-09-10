@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
+import WordCounter from "./WordCounter";
 
 interface Props {
   data: WritingData;
@@ -68,10 +69,7 @@ export default function Step6Experiment({ data, onChange }: Props) {
   };
 
   const addRow = () => {
-    const rows = [
-      ...table.rows,
-      new Array(table.headers.length).fill(""),
-    ];
+    const rows = [...table.rows, new Array(table.headers.length).fill("")];
     onChange({ experimentTable: { ...table, rows } });
   };
 
@@ -127,9 +125,7 @@ export default function Step6Experiment({ data, onChange }: Props) {
           placeholder="描述数据集、评价指标、对比方法和主要结论..."
           className="h-[180px] w-full resize-none rounded-lg border border-blue-100 bg-white p-5 font-serif text-[15px] leading-relaxed text-ink outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
         />
-        <div className="text-right text-xs text-ink-sub">
-          {data.experiment.length} 字符
-        </div>
+        <WordCounter text={data.experiment} min={400} max={1000} />
       </section>
 
       <section className="flex flex-col gap-2">

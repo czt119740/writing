@@ -1,32 +1,37 @@
-# React + TypeScript + Vite
+# 启航科研智能体 · 写作模块
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+一个面向学术写作的 AI 辅助工具，帮助研究者从「课题 + 实验材料」快速生成一篇符合会议投稿格式的论文。
 
-Currently, two official plugins are available:
+**当前支持**：CVPR 2026 格式  
+**技术栈**：React 19 + Vite 8 + Tailwind CSS 4 + TypeScript + Node.js (Express) + Qwen (通义千问)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ 功能概览
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- 📤 **素材上传**：课题名称 + 实验细节（.md）+ 实验结果（.md）+ 引用文献（.bib）
+- ✨ **AI 逐章生成**：标题摘要 / 引言 / 相关工作 / 算法介绍 / 实验结果 / 讨论和展望
+- 📊 **表格自动生成**：实验结果表格由 AI 直接生成，可手动微调
+- 🖼 **图片支持**：算法介绍可上传/AI 生成/URL 引入配图，支持查看大图、缩放、下载
+- 💾 **数据持久化**：所有内容自动保存到浏览器本地，刷新不丢
+- 📄 **一键导出**：
+  - 下载 CVPR LaTeX 项目 zip（含 main.tex + cvpr.sty + bib + 图片）
+  - 一键本地编译 PDF（需安装 TeX Live）
 
-## Expanding the Oxlint configuration
+---
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 🚀 快速开始
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+### 环境要求
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+| 工具 | 版本 | 说明 |
+|------|------|------|
+| Node.js | ≥ 18 | 推荐 20 或 22 |
+| npm | ≥ 9 | 随 Node 一起安装 |
+| TeX Live | 2024 或 2025 | **仅"一键编译 PDF"功能需要**，其他功能不需要 |
+
+### 1. 克隆项目
+
+```bash
+git clone https://github.com/czt119740/writing.git
+cd writing

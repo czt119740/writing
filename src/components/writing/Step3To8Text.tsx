@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
+import WordCounter from "./WordCounter";
 
 interface Props {
   data: WritingData;
@@ -10,6 +11,12 @@ interface Props {
   hint: string;
   placeholder: string;
 }
+
+const RANGES: Record<string, { min: number; max: number }> = {
+  intro: { min: 600, max: 1000 },
+  related: { min: 400, max: 800 },
+  discussion: { min: 300, max: 600 },
+};
 
 export default function Step3To8Text({
   data,
@@ -22,6 +29,8 @@ export default function Step3To8Text({
   const value = data[field];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const range = RANGES[field] ?? { min: 300, max: 1000 };
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -68,9 +77,7 @@ export default function Step3To8Text({
         className="min-h-0 flex-1 resize-none rounded-lg border border-blue-100 bg-white p-5 font-serif text-[15px] leading-relaxed text-ink outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
       />
 
-      <div className="text-right text-xs text-ink-sub">
-        {value.length} 字符
-      </div>
+      <WordCounter text={value} min={range.min} max={range.max} />
     </div>
   );
 }
