@@ -1,122 +1,18 @@
 import { useMemo, useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
 import { clearData } from "@/lib/storage";
+import { buildCvprTex, buildCvprBib } from "@/lib/cvprTex";
 
 interface Props {
   data: WritingData;
 }
 
-// ---------- 生成 main.tex ----------
-function buildTex(data: WritingData): string {
-  const esc = (s: string) =>
-    s
-      .replace(/\\/g, "\\\\")
-      .replace(/&/g, "\\&")
-      .replace(/%/g, "\\%")
-      .replace(/_/g, "\\_")
-      .replace(/#/g, "\\#");
-
-  const para = (s: string) =>
-    s
-      .split(/\n\s*\n/)
-      .map((p) => esc(p.trim()))
-      .filter(Boolean)
-      .join("\n\n");
-
-  const tableTex = (() => {
-    const { headers, rows } = data.experimentTable;
-    if (headers.length === 0) return "";
-    const colSpec = "l".repeat(headers.length);
-    const headerRow = headers.map((h) => `\\textbf{${esc(h)}}`).join(" & ");
-    const bodyRows = rows
-      .map((r) => r.map((c) => esc(c)).join(" & ") + " \\\\")
-      .join("\n");
-    return `
-\\begin{table}[htbp]
-  \\centering
-  \\caption{Experimental Results}
-  \\label{tab:results}
-  \\begin{tabular}{${colSpec}}
-    \\toprule
-    ${headerRow} \\\\
-    \\midrule
-    ${bodyRows}
-    \\bottomrule
-  \\end{tabular}
-\\end{table}
-`;
-  })();
-
-  const refsTex = data.references
-    .map((r) => `\\bibitem{${r.key.split(":").pop()}} ${esc(r.text)}`)
-    .join("\n");
-
-  const flowImg = data.algorithmFlowImage
-    ? "\\includegraphics[width=0.8\\linewidth]{figures/algorithm_flow.png}"
-    : "% TODO: algorithm_flow.png";
-  const illustImg = data.algorithmIllustImage
-    ? "\\includegraphics[width=0.8\\linewidth]{figures/algorithm_illustration.png}"
-    : "% TODO: algorithm_illustration.png";
-
-  return `\\documentclass[10pt,twocolumn]{article}
-\\usepackage{graphicx}
-\\usepackage{amsmath,amssymb}
-\\usepackage{booktabs}
-\\usepackage{geometry}
-\\geometry{a4paper,margin=2.5cm}
-
-\\title{${esc(data.title || "Untitled Paper")}}
-\\author{Author Name}
-\\date{\\today}
-
-\\begin{document}
-\\maketitle
-
-\\begin{abstract}
-${para(data.abstract)}
-\\end{abstract}
-
-\\section{Introduction}
-${para(data.intro)}
-
-\\section{Related Work}
-${para(data.related)}
-
-\\section{Method}
-${para(data.algorithm)}
-
-\\begin{figure}[htbp]
-  \\centering
-  ${flowImg}
-  \\caption{Overview of the proposed framework.}
-  \\label{fig:flow}
-\\end{figure}
-
-\\begin{figure}[htbp]
-  \\centering
-  ${illustImg}
-  \\caption{Illustration of the proposed module.}
-  \\label{fig:illust}
-\\end{figure}
-
-\\section{Experiments}
-${para(data.experiment)}
-
-${tableTex}
-
-\\section{Discussion}
-${para(data.discussion)}
-
-\\section*{References}
-\\begin{thebibliography}{99}
-${refsTex}
-\\end{thebibliography}
-
-\\end{document}
-`;
+async function fetchPublicFile(path: string): Promise<string> {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`无法加载 ${path}`);
+  return res.text();
 }
 
-// ---------- 从 dataURL 转成 Blob ----------
 function dataUrlToBlob(dataUrl: string): Blob {
   const [meta, base64] = dataUrl.split(",");
   const mime = /:(.*?);/.exec(meta)?.[1] ?? "image/png";
@@ -126,9 +22,18 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
+async function urlToBlob(url: string): Promise<Blob> {
+  if (url.startsWith("data:")) return dataUrlToBlob(url);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`无法下载图片 ${url}`);
+  return res.blob();
+}
+
 export default function Step9Export({ data }: Props) {
   const [downloading, setDownloading] = useState(false);
-  const tex = useMemo(() => buildTex(data), [data]);
+  const [error, setError] = useState("");
+
+  const tex = useMemo(() => buildCvprTex(data), [data]);
 
   const handleDownloadTex = () => {
     const blob = new Blob([tex], { type: "text/plain;charset=utf-8" });
@@ -142,34 +47,54 @@ export default function Step9Export({ data }: Props) {
 
   const handleDownloadZip = async () => {
     setDownloading(true);
+    setError("");
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
       zip.file("main.tex", tex);
-      zip.file("references.bib", data.bibContent || "% empty bib\n");
+      zip.file("main.bib", buildCvprBib(data));
+
+      try {
+        const [sty, bst, preamble] = await Promise.all([
+          fetchPublicFile("/cvpr-template/cvpr.sty"),
+          fetchPublicFile("/cvpr-template/ieeenat_fullname.bst"),
+          fetchPublicFile("/cvpr-template/preamble.tex"),
+        ]);
+        zip.file("cvpr.sty", sty);
+        zip.file("ieeenat_fullname.bst", bst);
+        zip.file("preamble.tex", preamble);
+      } catch (e) {
+        setError(`加载模板文件失败：${String(e)}`);
+      }
 
       const figFolder = zip.folder("figures")!;
       if (data.algorithmFlowImage) {
-        figFolder.file(
-          "algorithm_flow.png",
-          dataUrlToBlob(data.algorithmFlowImage)
-        );
+        try {
+          const blob = await urlToBlob(data.algorithmFlowImage);
+          figFolder.file("algorithm_flow.png", blob);
+        } catch (e) {
+          console.warn("flow image failed:", e);
+        }
       }
       if (data.algorithmIllustImage) {
-        figFolder.file(
-          "algorithm_illustration.png",
-          dataUrlToBlob(data.algorithmIllustImage)
-        );
+        try {
+          const blob = await urlToBlob(data.algorithmIllustImage);
+          figFolder.file("algorithm_illustration.png", blob);
+        } catch (e) {
+          console.warn("illust image failed:", e);
+        }
       }
 
       const blob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "paper-latex.zip";
+      a.download = "cvpr-paper.zip";
       a.click();
       URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(`打包失败：${String(e)}`);
     } finally {
       setDownloading(false);
     }
@@ -199,13 +124,14 @@ export default function Step9Export({ data }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h2 className="text-xl font-bold text-brand-700">生成 LaTeX</h2>
+        <h2 className="text-xl font-bold text-brand-700">
+          生成 CVPR LaTeX 项目
+        </h2>
         <p className="mt-1 text-sm text-ink-sub">
-          确认无误后，可以下载 .tex 源文件、图片和 .bib 文件的打包结果。
+          按照 CVPR 2026 Author Kit 格式生成 LaTeX 项目，下载后可直接上传 Overleaf 编译。
         </p>
       </header>
 
-      {/* 状态面板 */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="标题" value={data.title ? "✓" : "—"} />
         <Stat label="摘要" value={data.abstract ? "✓" : "—"} />
@@ -219,7 +145,42 @@ export default function Step9Export({ data }: Props) {
         />
       </section>
 
-      {/* 预览 */}
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-2 text-xs text-red-600">
+          {error}
+        </div>
+      )}
+
+      <section className="rounded-lg border border-blue-100 bg-[#f7faff] px-4 py-3 text-xs leading-relaxed text-ink-sub">
+        <div className="mb-1 font-semibold text-brand-700">
+          下载的 zip 包含：
+        </div>
+        <ul className="ml-4 list-disc">
+          <li>
+            <b>main.tex</b> — 主文件（CVPR 格式，审稿版匿名）
+          </li>
+          <li>
+            <b>cvpr.sty</b> — CVPR 官方样式文件
+          </li>
+          <li>
+            <b>preamble.tex</b> — 导言区宏定义
+          </li>
+          <li>
+            <b>ieeenat_fullname.bst</b> — 参考文献样式
+          </li>
+          <li>
+            <b>main.bib</b> — 参考文献数据
+          </li>
+          <li>
+            <b>figures/</b> — 配图文件夹（若已生成）
+          </li>
+        </ul>
+        <div className="mt-2">
+          ⓘ 上传到 Overleaf 后，<b>编译器选 pdfLaTeX</b>，点 Recompile 即可得到
+          CVPR 投稿格式 PDF。
+        </div>
+      </section>
+
       <section className="flex min-h-0 flex-1 flex-col gap-2">
         <div className="flex items-center justify-between">
           <label className="text-sm font-semibold text-ink">
@@ -233,12 +194,11 @@ export default function Step9Export({ data }: Props) {
             在新窗口打开
           </button>
         </div>
-        <pre className="max-h-[340px] min-h-[280px] overflow-auto rounded-lg border border-blue-100 bg-[#f7faff] p-4 text-[11.5px] leading-relaxed text-ink">
+        <pre className="max-h-[320px] min-h-[240px] overflow-auto rounded-lg border border-blue-100 bg-[#f7faff] p-4 text-[11.5px] leading-relaxed text-ink">
           {tex}
         </pre>
       </section>
 
-      {/* 下载按钮 */}
       <section className="flex flex-wrap gap-3">
         <button
           type="button"
@@ -246,7 +206,7 @@ export default function Step9Export({ data }: Props) {
           disabled={downloading}
           className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-brand-700 disabled:opacity-60"
         >
-          {downloading ? "打包中..." : "⬇ 下载 LaTeX 项目 (zip)"}
+          {downloading ? "打包中..." : "⬇ 下载 CVPR LaTeX 项目 (zip)"}
         </button>
         <button
           type="button"
@@ -257,18 +217,10 @@ export default function Step9Export({ data }: Props) {
         </button>
       </section>
 
-      <p className="text-xs text-ink-sub">
-        ⓘ 下载的 zip 包含：main.tex、references.bib、figures/（两张图，若已生成）。
-        打开 <b>Overleaf</b> 上传后即可编译成 PDF（建议编译器选 XeLaTeX）。
-      </p>
-
-      {/* 危险操作 */}
       <section className="mt-4 rounded-lg border border-red-100 bg-red-50/40 px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-semibold text-red-600">
-              危险操作
-            </div>
+            <div className="text-sm font-semibold text-red-600">危险操作</div>
             <div className="mt-0.5 text-xs text-ink-sub">
               清空所有已保存在本地的数据（课题、章节内容、上传文件等）。
             </div>

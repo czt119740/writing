@@ -16,8 +16,38 @@ export default function Step6Experiment({ data, onChange }: Props) {
     setLoading(true);
     setError("");
     try {
-      const text = await generateWithQwen("experiment", data);
-      onChange({ experiment: text });
+      const raw = await generateWithQwen("experiment", data);
+
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+
+          if (typeof parsed.text === "string") {
+            onChange({ experiment: parsed.text });
+          } else {
+            onChange({ experiment: raw });
+          }
+
+          if (
+            parsed.table &&
+            Array.isArray(parsed.table.headers) &&
+            Array.isArray(parsed.table.rows)
+          ) {
+            const headers = parsed.table.headers.map((h: unknown) =>
+              String(h ?? "")
+            );
+            const rows = parsed.table.rows.map((r: unknown[]) =>
+              headers.map((_: string, i: number) => String(r[i] ?? ""))
+            );
+            onChange({ experimentTable: { headers, rows } });
+          }
+        } catch {
+          onChange({ experiment: raw });
+        }
+      } else {
+        onChange({ experiment: raw });
+      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -185,7 +215,7 @@ export default function Step6Experiment({ data, onChange }: Props) {
         </div>
 
         <p className="text-xs text-ink-sub">
-          ⓘ 点击表头或单元格即可编辑；右上角按钮可增删行列。
+          ⓘ 点击「✨ AI 生成」会同时生成正文和表格；单元格也可手动编辑。
         </p>
       </section>
     </div>
