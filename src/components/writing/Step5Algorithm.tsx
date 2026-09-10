@@ -10,6 +10,18 @@ interface Props {
 
 type ImageKind = "algorithmFlowImage" | "algorithmIllustImage";
 
+// 根据课题 + 图类型拼默认提示词
+function buildDefaultPrompt(
+  kind: ImageKind,
+  topic: string
+): string {
+  const t = topic || "machine learning method";
+  if (kind === "algorithmFlowImage") {
+    return `A clean academic-style algorithm flowchart for the research topic "${t}". Show the overall pipeline: input data → processing modules → output, with clear directional arrows and English labels. Minimal design, white background, paper-ready figure, monochrome with subtle blue accents.`;
+  }
+  return `A clean academic-style schematic illustration of the key module for the research topic "${t}". Highlight the main innovation, with English labels and clear structure. Minimal design, white background, paper-ready figure, monochrome with subtle blue accents.`;
+}
+
 export default function Step5Algorithm({ data, onChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -17,6 +29,14 @@ export default function Step5Algorithm({ data, onChange }: Props) {
   const [imgLoadingFlow, setImgLoadingFlow] = useState(false);
   const [imgLoadingIllust, setImgLoadingIllust] = useState(false);
   const [imgError, setImgError] = useState("");
+
+  // 每个图槽的提示词（用户可以编辑）
+  const [promptFlow, setPromptFlow] = useState(() =>
+    buildDefaultPrompt("algorithmFlowImage", data.topic)
+  );
+  const [promptIllust, setPromptIllust] = useState(() =>
+    buildDefaultPrompt("algorithmIllustImage", data.topic)
+  );
 
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -43,14 +63,10 @@ export default function Step5Algorithm({ data, onChange }: Props) {
     setImgError("");
 
     try {
+      // 用用户当前的提示词，如果为空就用默认的
       const prompt =
-        kind === "algorithmFlowImage"
-          ? `A clean academic-style algorithm flowchart for the research topic "${
-              data.topic || "machine learning method"
-            }". Show input data → processing modules → output, with clear arrows and English labels. White background, minimal design, paper-ready figure.`
-          : `A clean academic-style schematic illustration of the key module for the research topic "${
-              data.topic || "machine learning method"
-            }". Highlight the main innovation, with English labels. White background, minimal design, paper-ready figure.`;
+        (kind === "algorithmFlowImage" ? promptFlow : promptIllust).trim() ||
+        buildDefaultPrompt(kind, data.topic);
 
       const res = await fetch("http://localhost:3001/api/generate-image", {
         method: "POST",
@@ -78,6 +94,14 @@ export default function Step5Algorithm({ data, onChange }: Props) {
 
   const clearImage = (kind: ImageKind) => {
     onChange({ [kind]: "" } as Partial<WritingData>);
+  };
+
+  const resetPrompt = (kind: ImageKind) => {
+    if (kind === "algorithmFlowImage") {
+      setPromptFlow(buildDefaultPrompt("algorithmFlowImage", data.topic));
+    } else {
+      setPromptIllust(buildDefaultPrompt("algorithmIllustImage", data.topic));
+    }
   };
 
   const handleUpload = (kind: ImageKind, file: File) => {
@@ -179,6 +203,9 @@ export default function Step5Algorithm({ data, onChange }: Props) {
           description="由课题与实验细节自动生成：输入→模块→输出 的整体流程"
           image={data.algorithmFlowImage}
           loading={imgLoadingFlow}
+          prompt={promptFlow}
+          onPromptChange={setPromptFlow}
+          onResetPrompt={() => resetPrompt("algorithmFlowImage")}
           onGenerate={() => handleGenerateImage("algorithmFlowImage")}
           onClear={() => clearImage("algorithmFlowImage")}
           onUpload={(file) => handleUpload("algorithmFlowImage", file)}
@@ -194,6 +221,9 @@ export default function Step5Algorithm({ data, onChange }: Props) {
           description="关键模块的结构示意图，突出创新点"
           image={data.algorithmIllustImage}
           loading={imgLoadingIllust}
+          prompt={promptIllust}
+          onPromptChange={setPromptIllust}
+          onResetPrompt={() => resetPrompt("algorithmIllustImage")}
           onGenerate={() => handleGenerateImage("algorithmIllustImage")}
           onClear={() => clearImage("algorithmIllustImage")}
           onUpload={(file) => handleUpload("algorithmIllustImage", file)}
@@ -207,7 +237,7 @@ export default function Step5Algorithm({ data, onChange }: Props) {
       </section>
 
       <p className="text-xs text-ink-sub">
-        ⓘ 可点击图片放大查看；支持 AI 生成、上传替换、输入 URL、下载。
+        ⓘ 可编辑提示词后再生成；也支持上传替换、输入 URL、点击图片放大查看。
       </p>
 
       {preview && <Lightbox src={preview} onClose={() => setPreview(null)} />}
@@ -220,6 +250,9 @@ interface ImageSlotProps {
   description: string;
   image: string;
   loading: boolean;
+  prompt: string;
+  onPromptChange: (v: string) => void;
+  onResetPrompt: () => void;
   onGenerate: () => void;
   onClear: () => void;
   onUpload: (file: File) => void;
@@ -234,6 +267,9 @@ function ImageSlot({
   description,
   image,
   loading,
+  prompt,
+  onPromptChange,
+  onResetPrompt,
   onGenerate,
   onClear,
   onUpload,
@@ -242,6 +278,8 @@ function ImageSlot({
   onPreview,
   uploadRef,
 }: ImageSlotProps) {
+  const [showPrompt, setShowPrompt] = useState(false);
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-blue-100 bg-white/70 p-4">
       <div>
@@ -249,6 +287,42 @@ function ImageSlot({
         <div className="mt-0.5 text-xs text-ink-sub">{description}</div>
       </div>
 
+      {/* 提示词折叠区 */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowPrompt((v) => !v)}
+          className="flex items-center gap-1 text-xs text-brand-500 hover:underline"
+        >
+          {showPrompt ? "▾ 隐藏提示词" : "▸ 编辑提示词"}
+        </button>
+
+        {showPrompt && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            <textarea
+              value={prompt}
+              onChange={(e) => onPromptChange(e.target.value)}
+              rows={4}
+              placeholder="描述你想要的图片（英文效果更好）..."
+              className="w-full resize-none rounded-lg border border-blue-100 bg-white px-3 py-2 text-xs leading-relaxed text-ink outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-ink-sub">
+                {prompt.length} 字符
+              </span>
+              <button
+                type="button"
+                onClick={onResetPrompt}
+                className="text-[10px] text-brand-500 hover:underline"
+              >
+                恢复默认提示词
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 图片容器 */}
       <div className="flex h-[260px] items-center justify-center overflow-hidden rounded-lg border border-dashed border-blue-200 bg-[#f7faff] p-2">
         {loading ? (
           <div className="text-center text-xs text-ink-sub">
