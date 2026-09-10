@@ -10,7 +10,7 @@ export type QwenSection =
 
 // ============ 配置 ============
 // 改成 false 后，会调用真实后端（等你有 API Key 时再改）
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 // ============ Mock 数据 ============
 const MOCK: Record<QwenSection, (data: WritingData) => string> = {
