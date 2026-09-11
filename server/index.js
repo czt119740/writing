@@ -4,6 +4,9 @@ import dotenv from "dotenv";
 import fetch from "node-fetch";
 import { fileURLToPath } from "url";
 import path from "path";
+import { exec } from "child_process";
+import fs from "fs/promises";
+import os from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,7 +15,7 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "20mb" }));
+app.use(express.json({ limit: "30mb" }));
 
 const API_KEY = process.env.DASHSCOPE_API_KEY;
 const BASE_URL =
@@ -20,7 +23,6 @@ const BASE_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const PORT = process.env.PORT || 3001;
 
-// 原始域名（去掉 /compatible-mode/v1）
 const RAW_HOST = (() => {
   try {
     const u = new URL(BASE_URL);
@@ -30,7 +32,10 @@ const RAW_HOST = (() => {
   }
 })();
 
-// ============ 文本生成：各章节 prompt ============
+// 本地模板目录
+const TEMPLATE_DIR = path.join(__dirname, "templates", "cvpr");
+
+// ============ 文本生成 Prompt ============
 const PROMPTS = {
   "title-abstract": (ctx) => ({
     system: `You are an academic writing assistant. Write a concise and professional paper title and abstract in English based on the given topic and experiment details. Return in this exact JSON format: {"title": "...", "abstract": "..."}`,
@@ -61,7 +66,7 @@ Return your output as a valid JSON object with this exact structure (no markdown
     ]
   }
 }
-The table should have 3-5 rows showing comparison between the proposed method and baselines. Values should be plausible based on the experiment description.`,
+The table should have 3-5 rows showing comparison between the proposed method and baselines.`,
     user: `Topic: ${ctx.topic}\n\nTitle: ${ctx.title}\n\nAbstract: ${ctx.abstract}\n\nExperiment Details:\n${ctx.experimentDetail}\n\nExperiment Results:\n${ctx.experimentResult}\n\nWrite the Experiments section as JSON.`,
   }),
   discussion: (ctx) => ({
@@ -174,10 +179,158 @@ app.post("/api/generate-image", async (req, res) => {
   }
 });
 
+// ============ 路由：编译 LaTeX → PDF ============
+// ============ 路由：中英翻译 ============
+app.post("/api/translate", async (req, res) => {
+  try {
+    const { text, direction } = req.body;
+    if (!text || !direction) {
+      return res.status(400).json({ error: "缺少 text 或 direction" });
+    }
+
+    const systemPrompt =
+      direction === "en2zh"
+        ? "You are a professional translator. Translate the following English academic text into fluent, natural Chinese. Preserve technical terms accurately. Output only the translation, no explanations, no quotes."
+        : "You are a professional translator. Translate the following Chinese academic text into fluent, natural English suitable for a top-tier computer science conference paper. Output only the translation, no explanations, no quotes.";
+
+    const url = `${BASE_URL}/chat/completions`;
+    console.log(`[Translate] POST ${url} direction=${direction}`);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "qwen-plus",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: text },
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[Translate] Error:", response.status, errText);
+      return res.status(response.status).json({ error: errText });
+    }
+
+    const data = await response.json();
+    const translation = data.choices?.[0]?.message?.content ?? "";
+    console.log(`[Translate] OK, ${translation.length} chars`);
+    res.json({ translation });
+  } catch (e) {
+    console.error("[Translate] Exception:", e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+app.post("/api/compile", async (req, res) => {
+  const { files } = req.body;
+  if (!files || !files["main.tex"]) {
+    return res.status(400).json({ error: "缺少 main.tex" });
+  }
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "latex-"));
+  console.log(`[Compile] 临时目录: ${tmpDir}`);
+
+  try {
+    // 1. 拷贝 CVPR 模板文件到临时目录
+    const templateFiles = [
+      "cvpr.sty",
+      "preamble.tex",
+      "ieeenat_fullname.bst",
+    ];
+    for (const name of templateFiles) {
+      const src = path.join(TEMPLATE_DIR, name);
+      const dst = path.join(tmpDir, name);
+      try {
+        await fs.copyFile(src, dst);
+        console.log(`[Compile] 已拷贝模板: ${name}`);
+      } catch (e) {
+        console.warn(`[Compile] 模板缺失: ${name} - ${String(e)}`);
+      }
+    }
+
+    // 2. 写入用户提交的文件（main.tex / main.bib / figures/*）
+    for (const [name, content] of Object.entries(files)) {
+      const filePath = path.join(tmpDir, name);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+
+      if (
+        name.match(/\.(png|jpg|jpeg|pdf)$/i) &&
+        typeof content === "string" &&
+        content.startsWith("data:")
+      ) {
+        const base64 = content.replace(/^data:image\/\w+;base64,/, "");
+        await fs.writeFile(filePath, Buffer.from(base64, "base64"));
+      } else if (typeof content === "string") {
+        await fs.writeFile(filePath, content, "utf-8");
+      }
+    }
+
+    // 3. 编译
+    const run = (cmd) =>
+      new Promise((resolve, reject) => {
+        exec(
+          cmd,
+          { cwd: tmpDir, timeout: 90000, maxBuffer: 10 * 1024 * 1024 },
+          (err, stdout, stderr) => {
+            console.log(`\n[Compile] ============ ${cmd} ============`);
+            console.log(`[Compile] stdout:\n${stdout}`);
+            if (stderr) console.log(`[Compile] stderr:\n${stderr}`);
+            if (err) reject(new Error(stderr || stdout || String(err)));
+            else resolve(stdout);
+          }
+        );
+      });
+
+    console.log("[Compile] 第 1 次 pdflatex...");
+    await run("pdflatex -interaction=nonstopmode -halt-on-error main.tex");
+
+    console.log("[Compile] bibtex...");
+    try {
+      await run("bibtex main");
+    } catch (e) {
+      console.warn("[Compile] bibtex 失败（可忽略）:", String(e).slice(0, 100));
+    }
+
+    console.log("[Compile] 第 2 次 pdflatex...");
+    await run("pdflatex -interaction=nonstopmode -halt-on-error main.tex");
+
+    console.log("[Compile] 第 3 次 pdflatex...");
+    await run("pdflatex -interaction=nonstopmode -halt-on-error main.tex");
+
+    const pdfPath = path.join(tmpDir, "main.pdf");
+    const pdfBuffer = await fs.readFile(pdfPath);
+
+    console.log(`[Compile] 成功，PDF 大小: ${pdfBuffer.length} 字节`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.send(pdfBuffer);
+  } catch (e) {
+    console.error("[Compile] 失败:", e);
+    let logContent = "";
+    try {
+      logContent = await fs.readFile(path.join(tmpDir, "main.log"), "utf-8");
+    } catch {}
+    res.status(500).json({
+      error: String(e),
+      log: logContent.slice(-3000),
+    });
+  } finally {
+    try {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    } catch {}
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Qwen proxy listening on http://localhost:${PORT}`);
   console.log(`   Base URL: ${BASE_URL}`);
   console.log(`   Raw Host: ${RAW_HOST}`);
+  console.log(`   Template: ${TEMPLATE_DIR}`);
   console.log(
     `   API Key:  ${API_KEY ? API_KEY.slice(0, 12) + "..." : "(missing)"}`
   );

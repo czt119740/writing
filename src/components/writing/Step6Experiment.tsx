@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
 import WordCounter from "./WordCounter";
+import TranslateButton from "./TranslateButton";
 
 interface Props {
   data: WritingData;
@@ -18,7 +19,6 @@ export default function Step6Experiment({ data, onChange }: Props) {
     setError("");
     try {
       const raw = await generateWithQwen("experiment", data);
-
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
@@ -125,7 +125,13 @@ export default function Step6Experiment({ data, onChange }: Props) {
           placeholder="描述数据集、评价指标、对比方法和主要结论..."
           className="h-[180px] w-full resize-none rounded-lg border border-blue-100 bg-white p-5 font-serif text-[15px] leading-relaxed text-ink outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
         />
-        <WordCounter text={data.experiment} min={400} max={1000} />
+        <div className="flex flex-col gap-2">
+          <WordCounter text={data.experiment} min={400} max={1000} />
+          <TranslateButton
+            text={data.experiment}
+            onApply={(translated) => onChange({ experiment: translated })}
+          />
+        </div>
       </section>
 
       <section className="flex flex-col gap-2">
@@ -169,7 +175,6 @@ export default function Step6Experiment({ data, onChange }: Props) {
                           type="button"
                           onClick={() => removeColumn(ci)}
                           className="text-[10px] text-slate-400 hover:text-red-500"
-                          title="删除该列"
                         >
                           ✕
                         </button>
@@ -198,7 +203,6 @@ export default function Step6Experiment({ data, onChange }: Props) {
                         type="button"
                         onClick={() => removeRow(ri)}
                         className="text-xs text-slate-400 hover:text-red-500"
-                        title="删除该行"
                       >
                         ✕
                       </button>

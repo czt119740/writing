@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
 import WordCounter from "./WordCounter";
+import TranslateButton from "./TranslateButton";
 
 interface Props {
   data: WritingData;
@@ -10,11 +11,7 @@ interface Props {
 
 type ImageKind = "algorithmFlowImage" | "algorithmIllustImage";
 
-// 根据课题 + 图类型拼默认提示词
-function buildDefaultPrompt(
-  kind: ImageKind,
-  topic: string
-): string {
+function buildDefaultPrompt(kind: ImageKind, topic: string): string {
   const t = topic || "machine learning method";
   if (kind === "algorithmFlowImage") {
     return `A clean academic-style algorithm flowchart for the research topic "${t}". Show the overall pipeline: input data → processing modules → output, with clear directional arrows and English labels. Minimal design, white background, paper-ready figure, monochrome with subtle blue accents.`;
@@ -30,7 +27,6 @@ export default function Step5Algorithm({ data, onChange }: Props) {
   const [imgLoadingIllust, setImgLoadingIllust] = useState(false);
   const [imgError, setImgError] = useState("");
 
-  // 每个图槽的提示词（用户可以编辑）
   const [promptFlow, setPromptFlow] = useState(() =>
     buildDefaultPrompt("algorithmFlowImage", data.topic)
   );
@@ -63,7 +59,6 @@ export default function Step5Algorithm({ data, onChange }: Props) {
     setImgError("");
 
     try {
-      // 用用户当前的提示词，如果为空就用默认的
       const prompt =
         (kind === "algorithmFlowImage" ? promptFlow : promptIllust).trim() ||
         buildDefaultPrompt(kind, data.topic);
@@ -194,7 +189,13 @@ export default function Step5Algorithm({ data, onChange }: Props) {
           placeholder="在这里描述你的算法：整体框架、各模块作用、训练目标等。"
           className="h-[220px] w-full resize-none rounded-lg border border-blue-100 bg-white p-5 font-serif text-[15px] leading-relaxed text-ink outline-none transition-all focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
         />
-        <WordCounter text={data.algorithm} min={600} max={1200} />
+        <div className="flex flex-col gap-2">
+          <WordCounter text={data.algorithm} min={600} max={1200} />
+          <TranslateButton
+            text={data.algorithm}
+            onApply={(translated) => onChange({ algorithm: translated })}
+          />
+        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -287,7 +288,6 @@ function ImageSlot({
         <div className="mt-0.5 text-xs text-ink-sub">{description}</div>
       </div>
 
-      {/* 提示词折叠区 */}
       <div>
         <button
           type="button"
@@ -322,7 +322,6 @@ function ImageSlot({
         )}
       </div>
 
-      {/* 图片容器 */}
       <div className="flex h-[260px] items-center justify-center overflow-hidden rounded-lg border border-dashed border-blue-200 bg-[#f7faff] p-2">
         {loading ? (
           <div className="text-center text-xs text-ink-sub">
@@ -492,7 +491,6 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
           type="button"
           onClick={() => setScale((s) => Math.max(s / 1.2, 0.2))}
           className="grid h-8 w-8 place-items-center rounded-full text-lg font-bold text-ink hover:bg-blue-50"
-          title="缩小"
         >
           −
         </button>
@@ -503,7 +501,6 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
           type="button"
           onClick={() => setScale((s) => Math.min(s * 1.2, 8))}
           className="grid h-8 w-8 place-items-center rounded-full text-lg font-bold text-ink hover:bg-blue-50"
-          title="放大"
         >
           +
         </button>

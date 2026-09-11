@@ -7,34 +7,13 @@ interface Props {
   data: WritingData;
 }
 
-async function fetchPublicFile(path: string): Promise<string> {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(`无法加载 ${path}`);
-  return res.text();
-}
-
-function dataUrlToBlob(dataUrl: string): Blob {
-  const [meta, base64] = dataUrl.split(",");
-  const mime = /:(.*?);/.exec(meta)?.[1] ?? "image/png";
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
-}
-
-async function urlToBlob(url: string): Promise<Blob> {
-  if (url.startsWith("data:")) return dataUrlToBlob(url);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`无法下载图片 ${url}`);
-  return res.blob();
-}
-
 export default function Step9Export({ data }: Props) {
-  const [downloading, setDownloading] = useState(false);
+  const [compiling, setCompiling] = useState(false);
   const [error, setError] = useState("");
 
   const tex = useMemo(() => buildCvprTex(data), [data]);
 
+  // 下载 main.tex
   const handleDownloadTex = () => {
     const blob = new Blob([tex], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -45,61 +24,64 @@ export default function Step9Export({ data }: Props) {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadZip = async () => {
-    setDownloading(true);
+  // 一键编译 PDF
+  const handleCompile = async () => {
+    setCompiling(true);
     setError("");
     try {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
+      const files: Record<string, string> = {};
+      files["main.tex"] = tex;
+      files["main.bib"] = buildCvprBib(data);
 
-      zip.file("main.tex", tex);
-      zip.file("main.bib", buildCvprBib(data));
+      // 图片转 dataURL
+      const toDataUrl = async (url: string): Promise<string> => {
+        if (url.startsWith("data:")) return url;
+        const res = await fetch(url);
+        const blob = await res.blob();
+        return await new Promise<string>((resolve) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result));
+          r.readAsDataURL(blob);
+        });
+      };
 
-      try {
-        const [sty, bst, preamble] = await Promise.all([
-          fetchPublicFile("/cvpr-template/cvpr.sty"),
-          fetchPublicFile("/cvpr-template/ieeenat_fullname.bst"),
-          fetchPublicFile("/cvpr-template/preamble.tex"),
-        ]);
-        zip.file("cvpr.sty", sty);
-        zip.file("ieeenat_fullname.bst", bst);
-        zip.file("preamble.tex", preamble);
-      } catch (e) {
-        setError(`加载模板文件失败：${String(e)}`);
-      }
-
-      const figFolder = zip.folder("figures")!;
       if (data.algorithmFlowImage) {
-        try {
-          const blob = await urlToBlob(data.algorithmFlowImage);
-          figFolder.file("algorithm_flow.png", blob);
-        } catch (e) {
-          console.warn("flow image failed:", e);
-        }
+        files["figures/algorithm_flow.png"] = await toDataUrl(
+          data.algorithmFlowImage
+        );
       }
       if (data.algorithmIllustImage) {
-        try {
-          const blob = await urlToBlob(data.algorithmIllustImage);
-          figFolder.file("algorithm_illustration.png", blob);
-        } catch (e) {
-          console.warn("illust image failed:", e);
-        }
+        files["figures/algorithm_illustration.png"] = await toDataUrl(
+          data.algorithmIllustImage
+        );
       }
 
-      const blob = await zip.generateAsync({ type: "blob" });
+      const res = await fetch("http://localhost:3001/api/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ files }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `编译失败（${res.status}）`);
+      }
+
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "cvpr-paper.zip";
+      a.download = "cvpr-paper.pdf";
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(`打包失败：${String(e)}`);
+      setError(`编译失败：${String(e)}`);
     } finally {
-      setDownloading(false);
+      setCompiling(false);
     }
   };
 
+  // 预览
   const handlePreview = () => {
     const w = window.open("", "_blank");
     if (!w) return;
@@ -112,6 +94,7 @@ export default function Step9Export({ data }: Props) {
     w.document.title = "main.tex 预览";
   };
 
+  // 清空全部
   const handleClearAll = () => {
     const ok = window.confirm(
       "确定要清空所有已保存的数据吗？此操作不可恢复。"
@@ -124,11 +107,9 @@ export default function Step9Export({ data }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h2 className="text-xl font-bold text-brand-700">
-          生成 CVPR LaTeX 项目
-        </h2>
+        <h2 className="text-xl font-bold text-brand-700">生成 CVPR PDF</h2>
         <p className="mt-1 text-sm text-ink-sub">
-          按照 CVPR 2026 Author Kit 格式生成 LaTeX 项目，下载后可直接上传 Overleaf 编译。
+          一键将论文编译成符合 CVPR 投稿格式的 PDF（后端自动套用 CVPR 模板）。
         </p>
       </header>
 
@@ -151,36 +132,6 @@ export default function Step9Export({ data }: Props) {
         </div>
       )}
 
-      <section className="rounded-lg border border-blue-100 bg-[#f7faff] px-4 py-3 text-xs leading-relaxed text-ink-sub">
-        <div className="mb-1 font-semibold text-brand-700">
-          下载的 zip 包含：
-        </div>
-        <ul className="ml-4 list-disc">
-          <li>
-            <b>main.tex</b> — 主文件（CVPR 格式，审稿版匿名）
-          </li>
-          <li>
-            <b>cvpr.sty</b> — CVPR 官方样式文件
-          </li>
-          <li>
-            <b>preamble.tex</b> — 导言区宏定义
-          </li>
-          <li>
-            <b>ieeenat_fullname.bst</b> — 参考文献样式
-          </li>
-          <li>
-            <b>main.bib</b> — 参考文献数据
-          </li>
-          <li>
-            <b>figures/</b> — 配图文件夹（若已生成）
-          </li>
-        </ul>
-        <div className="mt-2">
-          ⓘ 上传到 Overleaf 后，<b>编译器选 pdfLaTeX</b>，点 Recompile 即可得到
-          CVPR 投稿格式 PDF。
-        </div>
-      </section>
-
       <section className="flex min-h-0 flex-1 flex-col gap-2">
         <div className="flex items-center justify-between">
           <label className="text-sm font-semibold text-ink">
@@ -194,7 +145,7 @@ export default function Step9Export({ data }: Props) {
             在新窗口打开
           </button>
         </div>
-        <pre className="max-h-[320px] min-h-[240px] overflow-auto rounded-lg border border-blue-100 bg-[#f7faff] p-4 text-[11.5px] leading-relaxed text-ink">
+        <pre className="max-h-[340px] min-h-[260px] overflow-auto rounded-lg border border-blue-100 bg-[#f7faff] p-4 text-[11.5px] leading-relaxed text-ink">
           {tex}
         </pre>
       </section>
@@ -202,11 +153,11 @@ export default function Step9Export({ data }: Props) {
       <section className="flex flex-wrap gap-3">
         <button
           type="button"
-          onClick={handleDownloadZip}
-          disabled={downloading}
-          className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-brand-700 disabled:opacity-60"
+          onClick={handleCompile}
+          disabled={compiling}
+          className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-green-700 disabled:opacity-60"
         >
-          {downloading ? "打包中..." : "⬇ 下载 CVPR LaTeX 项目 (zip)"}
+          {compiling ? "编译中..." : "🔨 一键编译 PDF"}
         </button>
         <button
           type="button"
@@ -216,6 +167,10 @@ export default function Step9Export({ data }: Props) {
           ⬇ 仅下载 main.tex
         </button>
       </section>
+
+      <p className="text-xs text-ink-sub">
+        ⓘ 编译需要后端已安装 TeX Live，并已补装 CVPR 需要的宏包。首次编译可能需要 10~30 秒。
+      </p>
 
       <section className="mt-4 rounded-lg border border-red-100 bg-red-50/40 px-4 py-3">
         <div className="flex items-center justify-between gap-4">
