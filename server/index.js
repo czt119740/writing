@@ -34,26 +34,42 @@ const RAW_HOST = (() => {
 
 const TEMPLATE_DIR = path.join(__dirname, "templates", "cvpr");
 
+// ============ 数学公式提示 ============
+const MATH_HINT = `
+When writing mathematical formulas, you MUST follow these rules strictly:
+1. Wrap ALL inline math in $...$ and ALL display math in \\[...\\].
+2. Inside math, use ONLY standard LaTeX commands, NOT Unicode characters:
+   - Use \\mathbb{R} for real numbers, NOT ℝ
+   - Use \\in for element-of, NOT ∈
+   - Use \\times for multiplication, NOT ×
+   - Use \\geq / \\leq for ≥ / ≤
+   - Use \\alpha, \\beta, \\gamma for Greek letters, NOT α β γ
+   - Use \\sum, \\prod, \\int for sums/products/integrals
+   - Use ^{} and _{} for super/subscripts
+3. Do NOT use Unicode math symbols. Only ASCII + LaTeX commands.
+4. Example: write $x \\in \\mathbb{R}^{d}$ instead of "x ∈ ℝ^d".
+`.trim();
+
+// ============ 文本生成 Prompt ============
 const PROMPTS = {
   "title-abstract": (ctx) => ({
     system: `You are an academic writing assistant. Write a concise and professional paper title and abstract in English based on the given topic and experiment details. Return in this exact JSON format: {"title": "...", "abstract": "..."}`,
     user: `Topic: ${ctx.topic}\n\nExperiment Details:\n${ctx.experimentDetail}\n\nExperiment Results:\n${ctx.experimentResult}\n\nPlease write a paper title and abstract.`,
   }),
   intro: (ctx) => ({
-    system: `You are an academic writing assistant. Write the Introduction section in English. Use formal academic style, include research background, motivation, problem definition, and contributions. Output plain text only.`,
+    system: `You are an academic writing assistant. Write the Introduction section in English. Use formal academic style, include research background, motivation, problem definition, and contributions. Output plain text only.\n\n${MATH_HINT}`,
     user: `Topic: ${ctx.topic}\n\nTitle: ${ctx.title}\n\nAbstract: ${ctx.abstract}\n\nExperiment Details:\n${ctx.experimentDetail}\n\nWrite the Introduction section (about 800-1000 words).`,
   }),
   related: (ctx) => ({
-    system: `You are an academic writing assistant. Write the Related Work section in English. Compare and contrast existing approaches, point out their limitations, and position this work. Output plain text only.`,
+    system: `You are an academic writing assistant. Write the Related Work section in English. Compare and contrast existing approaches, point out their limitations, and position this work. Output plain text only.\n\n${MATH_HINT}`,
     user: `Topic: ${ctx.topic}\n\nTitle: ${ctx.title}\n\nAbstract: ${ctx.abstract}\n\nWrite the Related Work section (about 600-800 words).`,
   }),
   algorithm: (ctx) => ({
-    system: `You are an academic writing assistant. Write the Method section in English. Describe the proposed framework, modules, and training objective. Output plain text only.`,
+    system: `You are an academic writing assistant. Write the Method section in English. Describe the proposed framework, modules, and training objective. Output plain text only.\n\n${MATH_HINT}`,
     user: `Topic: ${ctx.topic}\n\nTitle: ${ctx.title}\n\nAbstract: ${ctx.abstract}\n\nExperiment Details:\n${ctx.experimentDetail}\n\nWrite the Method section (about 800-1200 words).`,
   }),
   experiment: (ctx) => ({
-    system: `You are an academic writing assistant. Write the Experiments section in English. Describe datasets, evaluation metrics, baselines, main results, and analysis.
-Return your output as a valid JSON object with this exact structure (no markdown code fences, no extra text):
+    system: `You are an academic writing assistant. Write the Experiments section in English. Describe datasets, evaluation metrics, baselines, main results, and analysis.\n\n${MATH_HINT}\n\nReturn your output as a valid JSON object with this exact structure (no markdown code fences, no extra text):
 {
   "text": "the full experiments section text (800-1000 words)",
   "table": {
@@ -68,11 +84,12 @@ The table should have 3-5 rows showing comparison between the proposed method an
     user: `Topic: ${ctx.topic}\n\nTitle: ${ctx.title}\n\nAbstract: ${ctx.abstract}\n\nExperiment Details:\n${ctx.experimentDetail}\n\nExperiment Results:\n${ctx.experimentResult}\n\nWrite the Experiments section as JSON.`,
   }),
   discussion: (ctx) => ({
-    system: `You are an academic writing assistant. Write the Discussion and Conclusion section in English. Discuss findings, limitations, and future directions. Output plain text only.`,
+    system: `You are an academic writing assistant. Write the Discussion and Conclusion section in English. Discuss findings, limitations, and future directions. Output plain text only.\n\n${MATH_HINT}`,
     user: `Topic: ${ctx.topic}\n\nTitle: ${ctx.title}\n\nAbstract: ${ctx.abstract}\n\nWrite the Discussion and Conclusion section (about 400-600 words).`,
   }),
 };
 
+// ============ 路由：文本生成 ============
 app.post("/api/generate", async (req, res) => {
   try {
     const { section, context } = req.body;
@@ -112,6 +129,7 @@ app.post("/api/generate", async (req, res) => {
   }
 });
 
+// ============ 路由：单段翻译 ============
 app.post("/api/translate", async (req, res) => {
   try {
     const { text, direction } = req.body;
@@ -154,6 +172,7 @@ app.post("/api/translate", async (req, res) => {
   }
 });
 
+// ============ 路由：整篇批量翻译 ============
 app.post("/api/translate-all", async (req, res) => {
   try {
     const { fields, direction } = req.body;
@@ -212,6 +231,7 @@ app.post("/api/translate-all", async (req, res) => {
   }
 });
 
+// ============ 路由：图像生成 ============
 app.post("/api/generate-image", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -264,6 +284,7 @@ app.post("/api/generate-image", async (req, res) => {
   }
 });
 
+// ============ 路由：编译 LaTeX → PDF ============
 app.post("/api/compile", async (req, res) => {
   const { files } = req.body;
   if (!files || !files["main.tex"]) {
@@ -330,7 +351,7 @@ app.post("/api/compile", async (req, res) => {
       logContent = await fs.readFile(path.join(tmpDir, "main.log"), "utf-8");
     } catch {}
     res.status(500).json({ error: String(e), log: logContent.slice(-3000) });
-  } finally {translate-all
+  } finally {
     try {
       await fs.rm(tmpDir, { recursive: true, force: true });
     } catch {}

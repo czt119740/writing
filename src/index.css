@@ -23,3 +23,24 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
+.katex {
+  font-size: 1.05em;
+}
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+}
+
+.math-rendered p {
+  margin: 0.5em 0;
+}
+
+.math-rendered p:first-child {
+  margin-top: 0;
+}
+
+.math-rendered p:last-child {
+  margin-bottom: 0;
+}
