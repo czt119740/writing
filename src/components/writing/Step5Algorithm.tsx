@@ -3,6 +3,7 @@ import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
 import WordCounter from "./WordCounter";
 import TranslateButton from "./TranslateButton";
+import PreviewButton from "./PreviewButton";
 
 interface Props {
   data: WritingData;
@@ -191,10 +192,13 @@ export default function Step5Algorithm({ data, onChange }: Props) {
         />
         <div className="flex flex-col gap-2">
           <WordCounter text={data.algorithm} min={600} max={1200} />
-          <TranslateButton
-            text={data.algorithm}
-            onApply={(translated) => onChange({ algorithm: translated })}
-          />
+          <div className="flex flex-wrap gap-2">
+            <TranslateButton
+              text={data.algorithm}
+              onApply={(translated) => onChange({ algorithm: translated })}
+            />
+            <PreviewButton text={data.algorithm} />
+          </div>
         </div>
       </section>
 
@@ -515,8 +519,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
       </div>
 
       <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/60">
-        滚轮缩放 · 拖动平移 · 
-        点击空白关闭
+        滚轮缩放 · 拖动平移 · 点击空白关闭
       </p>
     </div>
   );

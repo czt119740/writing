@@ -3,6 +3,7 @@ import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
 import WordCounter from "./WordCounter";
 import TranslateButton from "./TranslateButton";
+import PreviewButton from "./PreviewButton";
 
 interface Props {
   data: WritingData;
@@ -80,12 +81,15 @@ export default function Step3To8Text({
 
       <div className="flex flex-col gap-2">
         <WordCounter text={value} min={range.min} max={range.max} />
-        <TranslateButton
-          text={value}
-          onApply={(translated) =>
-            onChange({ [field]: translated } as Partial<WritingData>)
-          }
-        />
+        <div className="flex flex-wrap gap-2">
+          <TranslateButton
+            text={value}
+            onApply={(translated) =>
+              onChange({ [field]: translated } as Partial<WritingData>)
+            }
+          />
+          <PreviewButton text={value} />
+        </div>
       </div>
     </div>
   );

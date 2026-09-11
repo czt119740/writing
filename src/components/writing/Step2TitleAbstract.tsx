@@ -3,6 +3,7 @@ import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
 import WordCounter from "./WordCounter";
 import TranslateButton from "./TranslateButton";
+import PreviewButton from "./PreviewButton";
 
 interface Props {
   data: WritingData;
@@ -90,10 +91,13 @@ export default function Step2TitleAbstract({ data, onChange }: Props) {
         />
         <div className="mt-1 flex flex-col gap-2">
           <WordCounter text={data.abstract} min={150} max={250} />
-          <TranslateButton
-            text={data.abstract}
-            onApply={(translated) => onChange({ abstract: translated })}
-          />
+          <div className="flex flex-wrap gap-2">
+            <TranslateButton
+              text={data.abstract}
+              onApply={(translated) => onChange({ abstract: translated })}
+            />
+            <PreviewButton text={data.abstract} />
+          </div>
         </div>
       </section>
     </div>

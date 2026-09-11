@@ -3,6 +3,7 @@ import type { WritingData } from "@/data/writingSteps";
 import { generateWithQwen } from "@/lib/qwen";
 import WordCounter from "./WordCounter";
 import TranslateButton from "./TranslateButton";
+import PreviewButton from "./PreviewButton";
 
 interface Props {
   data: WritingData;
@@ -127,10 +128,13 @@ export default function Step6Experiment({ data, onChange }: Props) {
         />
         <div className="flex flex-col gap-2">
           <WordCounter text={data.experiment} min={400} max={1000} />
-          <TranslateButton
-            text={data.experiment}
-            onApply={(translated) => onChange({ experiment: translated })}
-          />
+          <div className="flex flex-wrap gap-2">
+            <TranslateButton
+              text={data.experiment}
+              onApply={(translated) => onChange({ experiment: translated })}
+            />
+            <PreviewButton text={data.experiment} />
+          </div>
         </div>
       </section>
 
