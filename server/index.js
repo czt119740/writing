@@ -32,10 +32,8 @@ const RAW_HOST = (() => {
   }
 })();
 
-// 本地模板目录
 const TEMPLATE_DIR = path.join(__dirname, "templates", "cvpr");
 
-// ============ 文本生成 Prompt ============
 const PROMPTS = {
   "title-abstract": (ctx) => ({
     system: `You are an academic writing assistant. Write a concise and professional paper title and abstract in English based on the given topic and experiment details. Return in this exact JSON format: {"title": "...", "abstract": "..."}`,
@@ -75,18 +73,15 @@ The table should have 3-5 rows showing comparison between the proposed method an
   }),
 };
 
-// ============ 路由：文本生成 ============
 app.post("/api/generate", async (req, res) => {
   try {
     const { section, context } = req.body;
     if (!section || !PROMPTS[section]) {
       return res.status(400).json({ error: "Unknown section" });
     }
-
     const { system, user } = PROMPTS[section](context);
     const url = `${BASE_URL}/chat/completions`;
     console.log(`[Qwen] POST ${url} section=${section}`);
-
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -102,13 +97,11 @@ app.post("/api/generate", async (req, res) => {
         temperature: 0.7,
       }),
     });
-
     if (!response.ok) {
       const errText = await response.text();
       console.error("[Qwen] Error:", response.status, errText);
       return res.status(response.status).json({ error: errText });
     }
-
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content ?? "";
     console.log(`[Qwen] OK, ${content.length} chars`);
@@ -119,83 +112,18 @@ app.post("/api/generate", async (req, res) => {
   }
 });
 
-// ============ 路由：图像生成 ============
-app.post("/api/generate-image", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    if (!prompt) {
-      return res.status(400).json({ error: "Missing prompt" });
-    }
-
-    const OPENAI_KEY = process.env.OPENAI_API_KEY;
-    const OPENAI_BASE =
-      process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-
-    if (!OPENAI_KEY) {
-      return res
-        .status(500)
-        .json({ error: "缺少 OPENAI_API_KEY，请在 server/.env 中配置" });
-    }
-
-    const url = `${OPENAI_BASE}/images/generations`;
-    console.log(`[Image] POST ${url}`);
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-image-2",
-        prompt,
-        n: 1,
-        size: "1024x1024",
-        quality: "medium",
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[Image] Error:", response.status, errText);
-      return res.status(response.status).json({ error: errText });
-    }
-
-    const data = await response.json();
-    const b64 = data?.data?.[0]?.b64_json;
-    if (!b64) {
-      return res.status(500).json({
-        error: "未能解析图片数据",
-        raw: JSON.stringify(data).slice(0, 500),
-      });
-    }
-
-    const imageUrl = `data:image/png;base64,${b64}`;
-    console.log(`[Image] OK, ${imageUrl.length} chars`);
-    res.json({ imageUrl });
-  } catch (e) {
-    console.error("[Image] Exception:", e);
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// ============ 路由：编译 LaTeX → PDF ============
-// ============ 路由：中英翻译 ============
 app.post("/api/translate", async (req, res) => {
   try {
     const { text, direction } = req.body;
     if (!text || !direction) {
       return res.status(400).json({ error: "缺少 text 或 direction" });
     }
-
     const systemPrompt =
       direction === "en2zh"
         ? "You are a professional translator. Translate the following English academic text into fluent, natural Chinese. Preserve technical terms accurately. Output only the translation, no explanations, no quotes."
         : "You are a professional translator. Translate the following Chinese academic text into fluent, natural English suitable for a top-tier computer science conference paper. Output only the translation, no explanations, no quotes.";
-
     const url = `${BASE_URL}/chat/completions`;
     console.log(`[Translate] POST ${url} direction=${direction}`);
-
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -211,13 +139,11 @@ app.post("/api/translate", async (req, res) => {
         temperature: 0.3,
       }),
     });
-
     if (!response.ok) {
       const errText = await response.text();
       console.error("[Translate] Error:", response.status, errText);
       return res.status(response.status).json({ error: errText });
     }
-
     const data = await response.json();
     const translation = data.choices?.[0]?.message?.content ?? "";
     console.log(`[Translate] OK, ${translation.length} chars`);
@@ -227,38 +153,138 @@ app.post("/api/translate", async (req, res) => {
     res.status(500).json({ error: String(e) });
   }
 });
+
+app.post("/api/translate-all", async (req, res) => {
+  try {
+    const { fields, direction } = req.body;
+    if (!fields || typeof fields !== "object" || !direction) {
+      return res.status(400).json({ error: "缺少 fields 或 direction" });
+    }
+    const systemPrompt =
+      direction === "en2zh"
+        ? "You are a professional translator. Translate the following English academic text into fluent, natural Chinese. Preserve technical terms accurately. Output only the translation, no explanations, no quotes."
+        : "You are a professional translator. Translate the following Chinese academic text into fluent, natural English suitable for a top-tier computer science conference paper. Output only the translation, no explanations, no quotes.";
+    const url = `${BASE_URL}/chat/completions`;
+    console.log(
+      `[TranslateAll] POST ${url} direction=${direction} fields=${Object.keys(fields).length}`
+    );
+    const entries = Object.entries(fields);
+    const results = await Promise.all(
+      entries.map(async ([key, text]) => {
+        if (!text || !String(text).trim()) return [key, ""];
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: "qwen-plus",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: String(text) },
+              ],
+              temperature: 0.3,
+            }),
+          });
+          if (!response.ok) {
+            const errText = await response.text();
+            console.error(`[TranslateAll] ${key} failed:`, errText.slice(0, 200));
+            return [key, ""];
+          }
+          const data = await response.json();
+          const t = data.choices?.[0]?.message?.content ?? "";
+          console.log(`[TranslateAll] ${key}: ${t.length} chars`);
+          return [key, t];
+        } catch (e) {
+          console.error(`[TranslateAll] ${key} exception:`, e);
+          return [key, ""];
+        }
+      })
+    );
+    const translations = Object.fromEntries(results);
+    console.log(`[TranslateAll] done`);
+    res.json({ translations });
+  } catch (e) {
+    console.error("[TranslateAll] Exception:", e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+app.post("/api/generate-image", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt" });
+    }
+    const OPENAI_KEY = process.env.OPENAI_API_KEY;
+    const OPENAI_BASE =
+      process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+    if (!OPENAI_KEY) {
+      return res
+        .status(500)
+        .json({ error: "缺少 OPENAI_API_KEY，请在 server/.env 中配置" });
+    }
+    const url = `${OPENAI_BASE}/images/generations`;
+    console.log(`[Image] POST ${url}`);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-image-2",
+        prompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "medium",
+      }),
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[Image] Error:", response.status, errText);
+      return res.status(response.status).json({ error: errText });
+    }
+    const data = await response.json();
+    const b64 = data?.data?.[0]?.b64_json;
+    if (!b64) {
+      return res.status(500).json({
+        error: "未能解析图片数据",
+        raw: JSON.stringify(data).slice(0, 500),
+      });
+    }
+    const imageUrl = `data:image/png;base64,${b64}`;
+    console.log(`[Image] OK, ${imageUrl.length} chars`);
+    res.json({ imageUrl });
+  } catch (e) {
+    console.error("[Image] Exception:", e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 app.post("/api/compile", async (req, res) => {
   const { files } = req.body;
   if (!files || !files["main.tex"]) {
     return res.status(400).json({ error: "缺少 main.tex" });
   }
-
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "latex-"));
   console.log(`[Compile] 临时目录: ${tmpDir}`);
-
   try {
-    // 1. 拷贝 CVPR 模板文件到临时目录
-    const templateFiles = [
-      "cvpr.sty",
-      "preamble.tex",
-      "ieeenat_fullname.bst",
-    ];
+    const templateFiles = ["cvpr.sty", "preamble.tex", "ieeenat_fullname.bst"];
     for (const name of templateFiles) {
       const src = path.join(TEMPLATE_DIR, name);
       const dst = path.join(tmpDir, name);
       try {
         await fs.copyFile(src, dst);
-        console.log(`[Compile] 已拷贝模板: ${name}`);
       } catch (e) {
-        console.warn(`[Compile] 模板缺失: ${name} - ${String(e)}`);
+        console.warn(`[Compile] 模板缺失: ${name}`);
       }
     }
-
-    // 2. 写入用户提交的文件（main.tex / main.bib / figures/*）
     for (const [name, content] of Object.entries(files)) {
       const filePath = path.join(tmpDir, name);
       await fs.mkdir(path.dirname(filePath), { recursive: true });
-
       if (
         name.match(/\.(png|jpg|jpeg|pdf)$/i) &&
         typeof content === "string" &&
@@ -270,8 +296,6 @@ app.post("/api/compile", async (req, res) => {
         await fs.writeFile(filePath, content, "utf-8");
       }
     }
-
-    // 3. 编译
     const run = (cmd) =>
       new Promise((resolve, reject) => {
         exec(
@@ -286,26 +310,16 @@ app.post("/api/compile", async (req, res) => {
           }
         );
       });
-
-    console.log("[Compile] 第 1 次 pdflatex...");
     await run("pdflatex -interaction=nonstopmode -halt-on-error main.tex");
-
-    console.log("[Compile] bibtex...");
     try {
       await run("bibtex main");
     } catch (e) {
-      console.warn("[Compile] bibtex 失败（可忽略）:", String(e).slice(0, 100));
+      console.warn("[Compile] bibtex 失败");
     }
-
-    console.log("[Compile] 第 2 次 pdflatex...");
     await run("pdflatex -interaction=nonstopmode -halt-on-error main.tex");
-
-    console.log("[Compile] 第 3 次 pdflatex...");
     await run("pdflatex -interaction=nonstopmode -halt-on-error main.tex");
-
     const pdfPath = path.join(tmpDir, "main.pdf");
     const pdfBuffer = await fs.readFile(pdfPath);
-
     console.log(`[Compile] 成功，PDF 大小: ${pdfBuffer.length} 字节`);
     res.setHeader("Content-Type", "application/pdf");
     res.send(pdfBuffer);
@@ -315,11 +329,8 @@ app.post("/api/compile", async (req, res) => {
     try {
       logContent = await fs.readFile(path.join(tmpDir, "main.log"), "utf-8");
     } catch {}
-    res.status(500).json({
-      error: String(e),
-      log: logContent.slice(-3000),
-    });
-  } finally {
+    res.status(500).json({ error: String(e), log: logContent.slice(-3000) });
+  } finally {translate-all
     try {
       await fs.rm(tmpDir, { recursive: true, force: true });
     } catch {}

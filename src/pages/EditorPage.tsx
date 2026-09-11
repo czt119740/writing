@@ -12,6 +12,7 @@ import Step3To8Text from "@/components/writing/Step3To8Text";
 import Step5Algorithm from "@/components/writing/Step5Algorithm";
 import Step6Experiment from "@/components/writing/Step6Experiment";
 import Step8References from "@/components/writing/Step8References";
+import Step9Preview from "@/components/writing/Step9Preview";
 import Step9Export from "@/components/writing/Step9Export";
 
 export default function EditorPage() {
@@ -19,7 +20,6 @@ export default function EditorPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [data, setData] = useState<WritingData>(() => loadData());
 
-  // 数据变化时自动保存到 localStorage
   useEffect(() => {
     saveData(data);
   }, [data]);
@@ -52,7 +52,6 @@ export default function EditorPage() {
 
       <section className="flex min-w-0 flex-col overflow-hidden p-4">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/60 shadow-lg backdrop-blur">
-          {/* 顶部：返回 + 标题 + 保存状态 */}
           <header className="flex items-center gap-4 border-b border-blue-100 bg-white/70 px-6 py-3">
             <Button
               variant="secondary"
@@ -121,9 +120,9 @@ export default function EditorPage() {
             })}
           </div>
 
-          {/* 当前步骤内容 */}
+          {/* 内容区 */}
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-8">
-            <div className="mx-auto flex w-full max-w-[900px] min-h-0 flex-1 flex-col">
+            <div className="mx-auto flex w-full max-w-[1100px] min-h-0 flex-1 flex-col">
               {currentStep.key === "upload" && (
                 <Step1Upload data={data} onChange={handleChange} />
               )}
@@ -136,7 +135,7 @@ export default function EditorPage() {
                   onChange={handleChange}
                   field="intro"
                   title="引言"
-                  hint="介绍研究背景、动机、问题定义和本文主要贡献。建议 800~1200 词。"
+                  hint="介绍研究背景、动机、问题定义和本文主要贡献。建议 600~1000 词。"
                   placeholder="在这里撰写引言..."
                 />
               )}
@@ -169,11 +168,13 @@ export default function EditorPage() {
               {currentStep.key === "references" && (
                 <Step8References data={data} onChange={handleChange} />
               )}
+              {currentStep.key === "preview" && (
+                <Step9Preview data={data} onChange={handleChange} />
+              )}
               {currentStep.key === "export" && <Step9Export data={data} />}
             </div>
           </div>
 
-          {/* 底部：上一步 / 下一步 */}
           <footer className="flex items-center justify-between gap-4 border-t border-blue-100 bg-white/70 px-6 py-3">
             <div className="text-xs text-ink-sub">
               第 <b className="text-brand-700">{stepIndex + 1}</b> / {STEPS.length}{" "}

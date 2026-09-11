@@ -515,7 +515,8 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
       </div>
 
       <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-white/60">
-        滚轮缩放 · 拖动平移 · 点击空白关闭
+        滚轮缩放 · 拖动平移 · 
+        点击空白关闭
       </p>
     </div>
   );
