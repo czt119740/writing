@@ -1,8 +1,49 @@
 import type { WritingData } from "@/data/writingSteps";
 
+/** 把常见的 Unicode 符号转成 LaTeX 命令 */
+function replaceUnicodeSymbols(s: string): string {
+  return s
+    .replace(/</g, "$<$")
+    .replace(/>/g, "$>$")
+    .replace(/≥/g, "$\\geq$")
+    .replace(/≤/g, "$\\leq$")
+    .replace(/≠/g, "$\\neq$")
+    .replace(/≈/g, "$\\approx$")
+    .replace(/×/g, "$\\times$")
+    .replace(/÷/g, "$\\div$")
+    .replace(/±/g, "$\\pm$")
+    .replace(/−/g, "-")
+    .replace(/–/g, "--")
+    .replace(/—/g, "---")
+    .replace(/’/g, "'")
+    .replace(/‘/g, "`")
+    .replace(/“/g, "``")
+    .replace(/”/g, "''")
+    .replace(/…/g, "\\ldots{}")
+    .replace(/•/g, "\\textbullet{}")
+    .replace(/α/g, "$\\alpha$")
+    .replace(/β/g, "$\\beta$")
+    .replace(/γ/g, "$\\gamma$")
+    .replace(/δ/g, "$\\delta$")
+    .replace(/λ/g, "$\\lambda$")
+    .replace(/μ/g, "$\\mu$")
+    .replace(/π/g, "$\\pi$")
+    .replace(/σ/g, "$\\sigma$")
+    .replace(/τ/g, "$\\tau$")
+    .replace(/φ/g, "$\\phi$")
+    .replace(/θ/g, "$\\theta$")
+    .replace(/Δ/g, "$\\Delta$")
+    .replace(/Σ/g, "$\\Sigma$")
+    .replace(/→/g, "$\\rightarrow$")
+    .replace(/←/g, "$\\leftarrow$")
+    .replace(/∈/g, "$\\in$")
+    .replace(/∀/g, "$\\forall$")
+    .replace(/∃/g, "$\\exists$");
+}
+
 /** 转义 LaTeX 特殊字符 */
 function esc(s: string): string {
-  return s
+  return replaceUnicodeSymbols(s)
     .replace(/\\/g, "\\\\")
     .replace(/&/g, "\\&")
     .replace(/%/g, "\\%")
@@ -51,11 +92,10 @@ function buildTable(data: WritingData): string {
 `;
 }
 
-/** 生成 main.tex（CVPR 格式） */
+/** 生成 main.tex（CVPR 格式，无行号版本） */
 export function buildCvprTex(data: WritingData): string {
   const title = esc(data.title || "Untitled Paper");
 
-  // 图片段落：只在有图时才 \includegraphics
   const flowFig = data.algorithmFlowImage
     ? `\\includegraphics[width=\\linewidth]{figures/algorithm_flow.png}`
     : `% \\includegraphics[width=\\linewidth]{figures/algorithm_flow.png}`;
@@ -70,18 +110,13 @@ export function buildCvprTex(data: WritingData): string {
 
 \\documentclass[10pt,twocolumn,letterpaper]{article}
 
-\\usepackage[review]{cvpr}
-% 可选：
-%   [review]        审稿版（匿名 + 行号）
-%   [pagenumbers]   arXiv 版（有页码）
-%   （不加参数）    Camera-ready 版
+\\usepackage{cvpr}
 
 \\input{preamble}
 
 \\definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
 \\usepackage[pagebackref,breaklinks,colorlinks,allcolors=cvprblue]{hyperref}
 
-% 匿名审稿信息
 \\def\\paperID{*****}
 \\def\\confName{CVPR}
 \\def\\confYear{2026}
@@ -139,7 +174,7 @@ ${paragraphs(data.discussion)}
 `;
 }
 
-/** 生成 main.bib（把用户输入的结构化引用转成 BibTeX） */
+/** 生成 main.bib */
 export function buildCvprBib(data: WritingData): string {
   if (!data.references || data.references.length === 0) {
     return "% Empty bibliography. Add your references here.\n";
@@ -147,15 +182,12 @@ export function buildCvprBib(data: WritingData): string {
 
   return data.references
     .map((ref, idx) => {
-      // key 形如 "article:smith2020" 或直接是 "smith2020"
       const rawKey = ref.key.includes(":") ? ref.key.split(":").pop()! : ref.key;
       const safeKey = rawKey.replace(/[^a-zA-Z0-9_:-]/g, "_");
 
-      // 尝试从 text 里提取年份
       const yearMatch = ref.text.match(/(19|20)\d{2}/);
       const year = yearMatch ? yearMatch[0] : "2024";
 
-      // 其余文本作为 title 字段（简单处理）
       const cleanText = ref.text.replace(/\s+/g, " ").trim();
       const title = cleanText.length > 200 ? cleanText.slice(0, 200) : cleanText;
 
